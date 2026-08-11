@@ -52,8 +52,23 @@ io.on('connection', (socket) => {
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(compression());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const cleanOrigin = origin.replace(/\/$/, '');
+    const targetUrl = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
+    
+    if (
+      !targetUrl ||
+      cleanOrigin === targetUrl ||
+      cleanOrigin.endsWith('.vercel.app') ||
+      cleanOrigin.includes('localhost')
+    ) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -69,6 +84,7 @@ app.get('/health', (_req, res) => {
 
 // ─── Public Routes ───────────────────────────────────
 app.use('/api/auth', authRouter);
+app.use('/auth', authRouter); // Alias for direct auth routes
 
 // ─── Protected Routes ────────────────────────────────
 app.use('/api/dashboard', authenticate, dashboardRouter);
