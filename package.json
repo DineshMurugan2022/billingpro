@@ -33,7 +33,10 @@
     "helmet": "^7.1.0",
     "express-rate-limit": "^7.2.0",
     "compression": "^1.7.4",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "prisma": "^5.11.0",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.2"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -46,9 +49,6 @@
     "@types/node": "^20.11.28",
     "@types/nodemailer": "^6.4.14",
     "@types/pdfkit": "^0.13.4",
-    "@types/uuid": "^9.0.8",
-    "prisma": "^5.11.0",
-    "tsx": "^4.7.1",
-    "typescript": "^5.4.2"
+    "@types/uuid": "^9.0.8"
   }
 }
