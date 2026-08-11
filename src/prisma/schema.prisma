@@ -1,0 +1,470 @@
+// This is your Prisma schema file
+// Billing & Inventory Management System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// AUTH & USERS
+// ─────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  CASHIER
+}
+
+model User {
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  phone       String?
+  password    String
+  role        UserRole @default(CASHIER)
+  isActive    Boolean  @default(true)
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bills       Bill[]
+  sessions    UserSession[]
+  purchaseOrders PurchaseOrder[]
+}
+
+model UserSession {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token       String   @unique
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+}
+
+// ─────────────────────────────────────────
+// STORE & BRANCHES
+// ─────────────────────────────────────────
+
+model Store {
+  id          String   @id @default(uuid())
+  name        String
+  gstNumber   String?
+  address     String?
+  city        String?
+  state       String?
+  pincode     String?
+  phone       String?
+  email       String?
+  logo        String?  // file path
+  website     String?
+  currency    String   @default("INR")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  branches    Branch[]
+}
+
+model Branch {
+  id          String   @id @default(uuid())
+  name        String
+  address     String?
+  phone       String?
+  gstNumber   String?
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id])
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  bills       Bill[]
+  inventory   Inventory[]
+  dayCloses   DayClose[]
+}
+
+// ─────────────────────────────────────────
+// PRODUCT CATALOG
+// ─────────────────────────────────────────
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  image       String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[]
+  subCategories SubCategory[]
+}
+
+model SubCategory {
+  id          String    @id @default(uuid())
+  name        String
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id])
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[]
+}
+
+enum GSTSlab {
+  ZERO      // 0%
+  FIVE      // 5%
+  TWELVE    // 12%
+  EIGHTEEN  // 18%
+  TWENTYEIGHT // 28%
+}
+
+enum TaxType {
+  INCLUSIVE   // MRP includes tax
+  EXCLUSIVE   // Tax added on top
+}
+
+model Product {
+  id              String       @id @default(uuid())
+  name            String
+  description     String?
+  barcode         String?      @unique
+  sku             String?      @unique
+  hsnCode         String?
+  categoryId      String?
+  category        Category?    @relation(fields: [categoryId], references: [id])
+  subCategoryId   String?
+  subCategory     SubCategory? @relation(fields: [subCategoryId], references: [id])
+  
+  // Pricing
+  mrp             Float        // Maximum Retail Price
+  sellingPrice    Float        // Actual selling price
+  purchasePrice   Float?       // Cost price
+  
+  // Tax
+  gstSlab         GSTSlab      @default(ZERO)
+  taxType         TaxType      @default(INCLUSIVE)
+  
+  // Units
+  unit            String       @default("PCS") // PCS, KG, LTR, MTR
+  secondaryUnit   String?      // e.g., BOX (1 BOX = 12 PCS)
+  conversionFactor Float?      // 1 secondary = X primary
+  
+  // Images
+  images          String[]     @default([])
+  
+  // Flags
+  isActive        Boolean      @default(true)
+  trackInventory  Boolean      @default(true)
+  hasBatch        Boolean      @default(false)  // for expiry tracking
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  inventory       Inventory[]
+  billItems       BillItem[]
+  purchaseItems   PurchaseItem[]
+  batches         ProductBatch[]
+}
+
+model ProductBatch {
+  id              String    @id @default(uuid())
+  productId       String
+  product         Product   @relation(fields: [productId], references: [id])
+  batchNumber     String
+  expiryDate      DateTime?
+  manufacturingDate DateTime?
+  purchasePrice   Float?
+  sellingPrice    Float?
+  quantity        Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([productId, batchNumber])
+}
+
+// ─────────────────────────────────────────
+// INVENTORY
+// ─────────────────────────────────────────
+
+enum StockMovementType {
+  PURCHASE
+  SALE
+  RETURN_IN       // customer return
+  RETURN_OUT      // return to supplier
+  DAMAGE
+  ADJUSTMENT
+  OPENING
+}
+
+model Inventory {
+  id              String    @id @default(uuid())
+  productId       String
+  product         Product   @relation(fields: [productId], references: [id])
+  branchId        String
+  branch          Branch    @relation(fields: [branchId], references: [id])
+  quantity        Float     @default(0)
+  reorderLevel    Float     @default(10)
+  reorderQuantity Float     @default(50)
+  updatedAt       DateTime  @updatedAt
+
+  movements       StockMovement[]
+
+  @@unique([productId, branchId])
+}
+
+model StockMovement {
+  id              String            @id @default(uuid())
+  inventoryId     String
+  inventory       Inventory         @relation(fields: [inventoryId], references: [id])
+  type            StockMovementType
+  quantity        Float             // positive = in, negative = out
+  balanceAfter    Float
+  reference       String?           // Bill ID / PO ID
+  notes           String?
+  createdAt       DateTime          @default(now())
+}
+
+// ─────────────────────────────────────────
+// CUSTOMERS
+// ─────────────────────────────────────────
+
+model Customer {
+  id              String    @id @default(uuid())
+  name            String
+  phone           String?   @unique
+  email           String?
+  address         String?
+  city            String?
+  gstNumber       String?   // for B2B invoices
+  loyaltyPoints   Float     @default(0)
+  creditLimit     Float     @default(0)
+  currentCredit   Float     @default(0)  // outstanding credit
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  bills           Bill[]
+  creditTransactions CreditTransaction[]
+}
+
+model CreditTransaction {
+  id          String    @id @default(uuid())
+  customerId  String
+  customer    Customer  @relation(fields: [customerId], references: [id])
+  amount      Float
+  type        String    // CREDIT_GIVEN, PAYMENT_RECEIVED
+  billId      String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+}
+
+// ─────────────────────────────────────────
+// SUPPLIERS
+// ─────────────────────────────────────────
+
+model Supplier {
+  id          String    @id @default(uuid())
+  name        String
+  phone       String?
+  email       String?
+  address     String?
+  gstNumber   String?
+  bankAccount String?
+  bankIFSC    String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+}
+
+enum POStatus {
+  DRAFT
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id              String    @id @default(uuid())
+  poNumber        String    @unique
+  supplierId      String
+  supplier        Supplier  @relation(fields: [supplierId], references: [id])
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  status          POStatus  @default(DRAFT)
+  totalAmount     Float     @default(0)
+  paidAmount      Float     @default(0)
+  notes           String?
+  expectedDate    DateTime?
+  receivedDate    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  items           PurchaseItem[]
+}
+
+model PurchaseItem {
+  id              String        @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  orderedQty      Float
+  receivedQty     Float         @default(0)
+  purchasePrice   Float
+  totalAmount     Float
+  batchNumber     String?
+  expiryDate      DateTime?
+}
+
+// ─────────────────────────────────────────
+// BILLING
+// ─────────────────────────────────────────
+
+enum PaymentMode {
+  CASH
+  CARD
+  UPI
+  CREDIT
+  MIXED
+}
+
+enum BillStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+  RETURN
+}
+
+model Bill {
+  id              String      @id @default(uuid())
+  invoiceNumber   String      @unique
+  branchId        String
+  branch          Branch      @relation(fields: [branchId], references: [id])
+  customerId      String?
+  customer        Customer?   @relation(fields: [customerId], references: [id])
+  cashierId       String
+  cashier         User        @relation(fields: [cashierId], references: [id])
+  
+  // Amounts
+  subtotal        Float       // before tax
+  discountAmount  Float       @default(0)
+  discountPercent Float       @default(0)
+  taxableAmount   Float       // after discount, before tax
+  cgstAmount      Float       @default(0)
+  sgstAmount      Float       @default(0)
+  igstAmount      Float       @default(0)
+  totalTax        Float       @default(0)
+  roundOff        Float       @default(0)
+  totalAmount     Float       // final amount
+  
+  // Payment
+  paymentMode     PaymentMode @default(CASH)
+  cashAmount      Float       @default(0)
+  cardAmount      Float       @default(0)
+  upiAmount       Float       @default(0)
+  creditAmount    Float       @default(0)
+  changeAmount    Float       @default(0)  // change given to customer
+  
+  // Loyalty
+  loyaltyPointsEarned Float   @default(0)
+  loyaltyPointsUsed   Float   @default(0)
+  
+  status          BillStatus  @default(COMPLETED)
+  notes           String?
+  originalBillId  String?     // for return bills
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  items           BillItem[]
+  returns         Bill[]      @relation("BillReturns")
+  originalBill    Bill?       @relation("BillReturns", fields: [originalBillId], references: [id])
+}
+
+model BillItem {
+  id              String    @id @default(uuid())
+  billId          String
+  bill            Bill      @relation(fields: [billId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product   @relation(fields: [productId], references: [id])
+  productName     String    // snapshot at time of sale
+  barcode         String?
+  hsnCode         String?
+  unit            String    @default("PCS")
+  quantity        Float
+  mrp             Float
+  sellingPrice    Float
+  discountPercent Float     @default(0)
+  discountAmount  Float     @default(0)
+  taxableAmount   Float
+  gstSlab         GSTSlab   @default(ZERO)
+  cgstPercent     Float     @default(0)
+  sgstPercent     Float     @default(0)
+  igstPercent     Float     @default(0)
+  cgstAmount      Float     @default(0)
+  sgstAmount      Float     @default(0)
+  igstAmount      Float     @default(0)
+  totalAmount     Float
+  batchNumber     String?
+}
+
+// ─────────────────────────────────────────
+// DAY CLOSE / SHIFTS
+// ─────────────────────────────────────────
+
+model DayClose {
+  id              String    @id @default(uuid())
+  branchId        String
+  branch          Branch    @relation(fields: [branchId], references: [id])
+  date            DateTime  @db.Date
+  openingBalance  Float     @default(0)
+  totalSales      Float     @default(0)
+  totalReturns    Float     @default(0)
+  cashSales       Float     @default(0)
+  cardSales       Float     @default(0)
+  upiSales        Float     @default(0)
+  creditSales     Float     @default(0)
+  totalExpenses   Float     @default(0)
+  closingBalance  Float     @default(0)
+  notes           String?
+  isClosed        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([branchId, date])
+}
+
+// ─────────────────────────────────────────
+// EXPENSES
+// ─────────────────────────────────────────
+
+model Expense {
+  id          String    @id @default(uuid())
+  title       String
+  amount      Float
+  category    String
+  notes       String?
+  date        DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+}
+
+// ─────────────────────────────────────────
+// SETTINGS
+// ─────────────────────────────────────────
+
+model Setting {
+  id    String @id @default(uuid())
+  key   String @unique
+  value String
+}
