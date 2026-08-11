@@ -83,24 +83,23 @@ app.get('/health', (_req, res) => {
 });
 
 // ─── Public Routes ───────────────────────────────────
-app.use('/api/auth', authRouter);
-app.use('/auth', authRouter); // Alias for direct auth routes
+app.use(['/api/auth', '/auth'], authRouter);
 
 // ─── Protected Routes ────────────────────────────────
-app.use('/api/dashboard', authenticate, dashboardRouter);
-app.use('/api/products', authenticate, productsRouter);
-app.use('/api/categories', authenticate, categoriesRouter);
-app.use('/api/inventory', authenticate, inventoryRouter);
-app.use('/api/billing', authenticate, billingRouter);
-app.use('/api/customers', authenticate, customersRouter);
-app.use('/api/suppliers', authenticate, suppliersRouter);
-app.use('/api/reports', authenticate, reportsRouter);
-app.use('/api/pos-hardware', authenticate, posHardwareRouter);
-app.use('/api/settings', authenticate, settingsRouter);
-app.use('/api/stores', authenticate, storesRouter);
-app.use('/api/branches', authenticate, branchesRouter);
-app.use('/api/users', authenticate, usersRouter);
-app.use('/api/expenses', authenticate, expensesRouter);
+app.use(['/api/dashboard', '/dashboard'], authenticate, dashboardRouter);
+app.use(['/api/products', '/products'], authenticate, productsRouter);
+app.use(['/api/categories', '/categories'], authenticate, categoriesRouter);
+app.use(['/api/inventory', '/inventory'], authenticate, inventoryRouter);
+app.use(['/api/billing', '/billing'], authenticate, billingRouter);
+app.use(['/api/customers', '/customers'], authenticate, customersRouter);
+app.use(['/api/suppliers', '/suppliers'], authenticate, suppliersRouter);
+app.use(['/api/reports', '/reports'], authenticate, reportsRouter);
+app.use(['/api/pos-hardware', '/pos-hardware'], authenticate, posHardwareRouter);
+app.use(['/api/settings', '/settings'], authenticate, settingsRouter);
+app.use(['/api/stores', '/stores'], authenticate, storesRouter);
+app.use(['/api/branches', '/branches'], authenticate, branchesRouter);
+app.use(['/api/users', '/users'], authenticate, usersRouter);
+app.use(['/api/expenses', '/expenses'], authenticate, expensesRouter);
 
 // ─── Error Handler ───────────────────────────────────
 app.use(errorHandler);
