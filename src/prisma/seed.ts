@@ -1,10 +1,43 @@
 import { PrismaClient, UserRole, GSTSlab } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import fs from 'fs';
+import path from 'path';
 
 const prisma = new PrismaClient();
 
+interface PdfProduct {
+  serviceId: string;
+  name: string;
+  b2bPrice: number;
+  b2cPrice: number;
+  discount: number;
+}
+
+function getCategoryName(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('x-ray') || n.includes('ct ') || n.includes('mri ') || n.includes('usg') || n.includes('doppler') || n.includes('scan')) {
+    return 'Radiology';
+  }
+  if (n.includes('ecg') || n.includes('echo') || n.includes('tmt') || n.includes('cardiac')) {
+    return 'Cardiology';
+  }
+  if (n.includes('culture') || n.includes('stain') || n.includes('fungus') || n.includes('bacteria') || n.includes('tb ') || n.includes('microbiology')) {
+    return 'Microbiology';
+  }
+  if (n.includes('antibody') || n.includes('immun') || n.includes('ana') || n.includes('hiv') || n.includes('hbs') || n.includes('hcv') || n.includes('igg') || n.includes('igm') || n.includes('iga')) {
+    return 'Immunology';
+  }
+  if (n.includes('lymphocyte') || n.includes('blood') || n.includes('coombs') || n.includes('thromboplastin') || n.includes('cbc') || n.includes('hemoglobin') || n.includes('neutrophil') || n.includes('platelet') || n.includes('anemia')) {
+    return 'Hematology';
+  }
+  if (n.includes('glucose') || n.includes('bilirubin') || n.includes('phosphorus') || n.includes('copper') || n.includes('creatinine') || n.includes('protein') || n.includes('albumin') || n.includes('anion') || n.includes('apolipoprotein') || n.includes('calcium') || n.includes('chloride') || n.includes('potassium') || n.includes('sodium') || n.includes('electrolytes') || n.includes('urea') || n.includes('lipid') || n.includes('thyroid') || n.includes('lft') || n.includes('kft')) {
+    return 'Biochemistry';
+  }
+  return 'Pathology';
+}
+
 async function main() {
-  console.log('🌱 Seeding database...');
+  console.log('🌱 Seeding database with MERL DIAGNOSTICS product details...');
 
   // Create Store
   const store = await prisma.store.upsert({
@@ -54,7 +87,7 @@ async function main() {
 
   // Create Admin User
   const hashedPassword = await bcrypt.hash('Admin@123', 10);
-  const admin = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { email: 'admin@billing.com' },
     update: {},
     create: {
@@ -81,50 +114,22 @@ async function main() {
   });
 
   // Categories
-  const cats = ['Biochemistry', 'Hematology', 'Pathology', 'Microbiology', 'Immunology', 'Radiology', 'Cardiology'];
-  const categories: Record<string, string> = {};
-  for (const name of cats) {
+  const catNames = ['Biochemistry', 'Hematology', 'Pathology', 'Microbiology', 'Immunology', 'Radiology', 'Cardiology'];
+  const categoryMap: Record<string, string> = {};
+  for (const name of catNames) {
     const cat = await prisma.category.upsert({
       where: { name },
       update: {},
       create: { name },
     });
-    categories[name] = cat.id;
+    categoryMap[name] = cat.id;
   }
 
-  // Sample Products (Diagnostic Tests)
-  const products = [
-    { name: 'Glucose - Fasting', barcode: 'TEST001', categoryId: categories['Biochemistry'], mrp: 30, sellingPrice: 30, purchasePrice: 0, gstSlab: GSTSlab.ZERO, unit: 'TEST', hsnCode: '9993' },
-    { name: 'Glucose - Post Prandial', barcode: 'TEST002', categoryId: categories['Biochemistry'], mrp: 30, sellingPrice: 30, purchasePrice: 0, gstSlab: GSTSlab.ZERO, unit: 'TEST', hsnCode: '9993' },
-    { name: 'Complete Blood Count (CBC)', barcode: 'TEST003', categoryId: categories['Hematology'], mrp: 250, sellingPrice: 200, purchasePrice: 0, gstSlab: GSTSlab.ZERO, unit: 'TEST', hsnCode: '9993' },
-    { name: 'Lipid Profile', barcode: 'TEST004', categoryId: categories['Biochemistry'], mrp: 400, sellingPrice: 350, purchasePrice: 0, gstSlab: GSTSlab.ZERO, unit: 'TEST', hsnCode: '9993' },
-    { name: 'Thyroid Profile (T3, T4, TSH)', barcode: 'TEST005', categoryId: categories['Immunology'], mrp: 550, sellingPrice: 500, purchasePrice: 0, gstSlab: GSTSlab.ZERO, unit: 'TEST', hsnCode: '9993' },
-    { name: 'HbA1c', barcode: 'TEST006', categoryId: categories['Biochemistry'], mrp: 400, sellingPrice: 350, purchasePrice: 0, gstSlab: GSTSlab.ZERO, unit: 'TEST', hsnCode: '9993' },
-    { name: 'Vitamin D (25-OH)', barcode: 'TEST007', categoryId: categories['Biochemistry'], mrp: 1200, sellingPrice: 900, purchasePrice: 0, gstSlab: GSTSlab.ZERO, unit: 'TEST', hsnCode: '9993' },
-    { name: 'Liver Function Test (LFT)', barcode: 'TEST008', categoryId: categories['Biochemistry'], mrp: 600, sellingPrice: 500, purchasePrice: 0, gstSlab: GSTSlab.ZERO, unit: 'TEST', hsnCode: '9993' },
-    { name: 'Kidney Function Test (KFT)', barcode: 'TEST009', categoryId: categories['Biochemistry'], mrp: 600, sellingPrice: 500, purchasePrice: 0, gstSlab: GSTSlab.ZERO, unit: 'TEST', hsnCode: '9993' },
-    { name: 'Urine Routine & Microscopy', barcode: 'TEST010', categoryId: categories['Pathology'], mrp: 150, sellingPrice: 120, purchasePrice: 0, gstSlab: GSTSlab.ZERO, unit: 'TEST', hsnCode: '9993' },
-  ];
-
-  for (const p of products) {
-    const product = await prisma.product.upsert({
-      where: { barcode: p.barcode },
-      update: { ...p, isActive: true, trackInventory: false },
-      create: { ...p, isActive: true, trackInventory: false },
-    });
-    // Add inventory (tests don't technically need stock, but required by schema)
-    await prisma.inventory.upsert({
-      where: { productId_branchId: { productId: product.id, branchId: branch.id } },
-      update: { quantity: 1000 },
-      create: { productId: product.id, branchId: branch.id, quantity: 1000, reorderLevel: 10, reorderQuantity: 50 },
-    });
-  }
-
-  // Sample Customer
+  // Sample Customer (Mrs LAKSHMI)
   await prisma.customer.upsert({
     where: { phone: '9876500001' },
-    update: { name: 'Mrs LAKSHMI', phone: '9876500001', email: 'lakshmi@example.com', city: 'Chennai', gender: 'Female', age: 53 },
-    create: { name: 'Mrs LAKSHMI', phone: '9876500001', email: 'lakshmi@example.com', city: 'Chennai', loyaltyPoints: 50, gender: 'Female', age: 53 },
+    update: { name: 'Mrs LAKSHMI', phone: '9876500001', email: '', city: 'Chennai', gender: 'Female', age: 53 },
+    create: { name: 'Mrs LAKSHMI', phone: '9876500001', email: '', city: 'Chennai', loyaltyPoints: 50, gender: 'Female', age: 53 },
   });
 
   // Default settings
@@ -143,11 +148,84 @@ async function main() {
     await prisma.setting.upsert({ where: { key: s.key }, update: { value: s.value }, create: s });
   }
 
+  // Read products JSON
+  const jsonPath = path.join(__dirname, 'pdf_products.json');
+  if (fs.existsSync(jsonPath)) {
+    const rawData = fs.readFileSync(jsonPath, 'utf-8');
+    const pdfProducts: PdfProduct[] = JSON.parse(rawData);
+
+    console.log(`📦 Seeding ${pdfProducts.length} products from PDF...`);
+
+    let count = 0;
+    // Process in batches
+    const batchSize = 100;
+    for (let i = 0; i < pdfProducts.length; i += batchSize) {
+      const chunk = pdfProducts.slice(i, i + batchSize);
+      await Promise.all(
+        chunk.map(async (item) => {
+          const catName = getCategoryName(item.name);
+          const categoryId = categoryMap[catName] || categoryMap['Pathology'];
+          const mrp = item.b2cPrice > 0 ? item.b2cPrice : (item.b2bPrice > 0 ? item.b2bPrice : 100);
+          const sellingPrice = item.b2bPrice > 0 ? item.b2bPrice : mrp;
+
+          const barcode = item.serviceId;
+          const sku = `SRV-${item.serviceId}`;
+
+          const product = await prisma.product.upsert({
+            where: { barcode },
+            update: {
+              name: item.name,
+              mrp,
+              sellingPrice,
+              purchasePrice: 0,
+              gstSlab: GSTSlab.ZERO,
+              unit: 'TEST',
+              hsnCode: '9993',
+              categoryId,
+              isActive: true,
+              trackInventory: false,
+            },
+            create: {
+              name: item.name,
+              barcode,
+              sku,
+              mrp,
+              sellingPrice,
+              purchasePrice: 0,
+              gstSlab: GSTSlab.ZERO,
+              unit: 'TEST',
+              hsnCode: '9993',
+              categoryId,
+              isActive: true,
+              trackInventory: false,
+            },
+          });
+
+          await prisma.inventory.upsert({
+            where: { productId_branchId: { productId: product.id, branchId: branch.id } },
+            update: { quantity: 1000 },
+            create: { productId: product.id, branchId: branch.id, quantity: 1000, reorderLevel: 10, reorderQuantity: 50 },
+          });
+        })
+      );
+      count += chunk.length;
+      if (count % 500 === 0 || count === pdfProducts.length) {
+        console.log(`   Upserted ${count}/${pdfProducts.length} products...`);
+      }
+    }
+    console.log(`✅ Successfully seeded ${count} products into database!`);
+  } else {
+    console.warn(`⚠️ File ${jsonPath} not found!`);
+  }
+
   console.log('✅ Seed complete!');
-  console.log('👤 Admin login: admin@billing.com / Admin@123');
-  console.log('👤 Cashier login: cashier@billing.com / Cashier@123');
 }
 
 main()
-  .catch(console.error)
-  .finally(() => prisma.$disconnect());
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
