@@ -7,8 +7,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ─────────────────────────────────────────
@@ -248,6 +249,8 @@ model Customer {
   loyaltyPoints   Float     @default(0)
   creditLimit     Float     @default(0)
   currentCredit   Float     @default(0)  // outstanding credit
+  gender          String?
+  age             Int?
   isActive        Boolean   @default(true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -383,9 +386,9 @@ model Bill {
   
   status          BillStatus  @default(COMPLETED)
   notes           String?
-  receivedBy      String?     // cashier/staff name who received payment
   originalBillId  String?     // for return bills
-  
+  receivedBy      String?     // for POS
+
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
