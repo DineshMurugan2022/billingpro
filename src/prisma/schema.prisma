@@ -383,6 +383,7 @@ model Bill {
   
   status          BillStatus  @default(COMPLETED)
   notes           String?
+  receivedBy      String?     // cashier/staff name who received payment
   originalBillId  String?     // for return bills
   
   createdAt       DateTime    @default(now())
